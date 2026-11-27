@@ -54,12 +54,19 @@ export function PharmacyWorkspace() {
     }
   }, []);
 
+  const pendingCount = orders.filter(
+    (order) => order.status === "pending_approval",
+  ).length;
+  const inStockCount = inventory.filter((item) => item.stock_qty > 0).length;
+  const outOfStockCount = inventory.length - inStockCount;
+
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
   useEffect(() => {
-    if (activeTab === "prescription") {
+    const shouldPoll = activeTab !== "prescription" || pendingCount > 0;
+    if (!shouldPoll) {
       return;
     }
 
@@ -67,10 +74,10 @@ export function PharmacyWorkspace() {
       if (document.visibilityState === "visible") {
         void loadData();
       }
-    }, 5000);
+    }, 4500);
 
     return () => window.clearInterval(timer);
-  }, [activeTab, loadData]);
+  }, [activeTab, pendingCount, loadData]);
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
@@ -134,12 +141,6 @@ export function PharmacyWorkspace() {
       void loadData();
     }
   }
-
-  const pendingCount = orders.filter(
-    (order) => order.status === "pending_approval",
-  ).length;
-  const inStockCount = inventory.filter((item) => item.stock_qty > 0).length;
-  const outOfStockCount = inventory.length - inStockCount;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -274,7 +275,7 @@ export function PharmacyWorkspace() {
           </div>
         </section>
 
-        <main className="tab-panels-stack pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+        <main className="tab-panels-stack">
           <div
             role="tabpanel"
             aria-labelledby="tab-prescription"
@@ -282,7 +283,12 @@ export function PharmacyWorkspace() {
             className="tab-panel"
           >
             <div>
-              <PrescriptionForm onAnalyzed={handlePrescriptionAnalyzed} />
+              <PrescriptionForm
+                orders={orders}
+                inventoryCount={inventory.length}
+                onAnalyzed={handlePrescriptionAnalyzed}
+                onOpenPharmacistPanel={() => setActiveTab("orders")}
+              />
             </div>
           </div>
 
@@ -314,6 +320,24 @@ export function PharmacyWorkspace() {
           </div>
         </main>
       </div>
+
+      <footer className="mt-10 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)]/70 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-[var(--ink-muted)] sm:px-6 lg:px-8">
+          <span>ФармаКонтроль · Generative AI · ISE MNU</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="https://t.me/mnu_pharmacy_bot"
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[var(--accent)] underline decoration-[var(--accent)]/35 underline-offset-4 hover:decoration-[var(--accent)]"
+            >
+              @mnu_pharmacy_bot
+            </a>
+            <span>·</span>
+            <span>Справочный ИИ-ассистент · Human-in-the-Loop</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

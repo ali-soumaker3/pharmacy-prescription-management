@@ -1,26 +1,36 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  Check,
   CheckCircle2,
+  Copy,
   ImagePlus,
   Loader2,
+  RotateCcw,
   ShieldAlert,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import type { PrescriptionAnalysisResult } from "@/lib/schemas";
+import type {
+  OrderStatus,
+  PharmacyOrderRecord,
+  PrescriptionAnalysisResult,
+} from "@/lib/schemas";
 import { PRESCRIPTION_PRESETS, type PrescriptionPreset } from "@/lib/mock-data";
 
 interface PrescriptionFormProps {
+  orders: PharmacyOrderRecord[];
+  inventoryCount: number;
   onAnalyzed: (result: PrescriptionAnalysisResult) => void;
+  onOpenPharmacistPanel: () => void;
 }
 
 const ORDER_STATUS_META: Record<
-  PrescriptionAnalysisResult["status"],
+  OrderStatus,
   { label: string; dotClass: string; badgeClass: string }
 > = {
   pending_approval: {
@@ -54,22 +64,30 @@ const SOURCE_LABELS: Record<PrescriptionAnalysisResult["source"], string> = {
 const SEVERITY_META = {
   high: {
     label: "Критичный риск",
-    wrapper: "border-l-4 border-l-[#b42318] border-[#f2c6c2] bg-[#fef3f2] text-[#7a1b14]",
+    wrapper:
+      "border-l-4 border-l-[#b42318] border-[#f2c6c2] bg-[#fef3f2] text-[#7a1b14]",
     tag: "bg-[#b42318] text-white",
   },
   medium: {
     label: "Внимание",
-    wrapper: "border-l-4 border-l-[#b56a12] border-[#f0d8a8] bg-[#fffaeb] text-[#6d400c]",
+    wrapper:
+      "border-l-4 border-l-[#b56a12] border-[#f0d8a8] bg-[#fffaeb] text-[#6d400c]",
     tag: "bg-[#b56a12] text-white",
   },
   low: {
     label: "Рекомендация",
-    wrapper: "border-l-4 border-l-[#114b46] border-[#c5ddd9] bg-[#eef6f5] text-[#103c38]",
+    wrapper:
+      "border-l-4 border-l-[#114b46] border-[#c5ddd9] bg-[#eef6f5] text-[#103c38]",
     tag: "bg-[#114b46] text-white",
   },
 };
 
-export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
+export function PrescriptionForm({
+  orders,
+  inventoryCount,
+  onAnalyzed,
+  onOpenPharmacistPanel,
+}: PrescriptionFormProps) {
   const [patientName, setPatientName] = useState("");
   const [patientPhone, setPatientPhone] = useState("");
   const [allergies, setAllergies] = useState("");
@@ -78,11 +96,49 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
   const [imageFileName, setImageFileName] = useState<string | null>(null);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState(0);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<PrescriptionAnalysisResult | null>(null);
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>(
     {},
   );
+
+  const analysisSteps = [
+    {
+      code: "01",
+      title: "Распознавание рецепта",
+      detail: "Извлекаем препараты, дозировки и схему приёма через OpenRouter",
+    },
+    {
+      code: "02",
+      title: "Сверка со складом аптеки",
+      detail: `Проверяем наличие среди ${inventoryCount || 28} препаратов в Supabase и ищем аналоги`,
+    },
+    {
+      code: "03",
+      title: "Контроль безопасности",
+      detail: "Анализируем аллергии пациента и лекарственные взаимодействия",
+    },
+    {
+      code: "04",
+      title: "Оформление и уведомление",
+      detail: "Сохраняем заказ и отправляем карточку фармацевту в Telegram",
+    },
+  ];
+
+  useEffect(() => {
+    if (!submitting) {
+      setAnalysisStep(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setAnalysisStep((prev) => (prev < 3 ? prev + 1 : prev));
+    }, 2400);
+
+    return () => window.clearInterval(timer);
+  }, [submitting]);
 
   function syncFieldValidity(target: HTMLInputElement | HTMLTextAreaElement) {
     const isInvalid = target.matches(":user-invalid");
@@ -125,6 +181,29 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
     setErrorMessage(null);
   }
 
+  function handleResetForm() {
+    setPatientName("");
+    setPatientPhone("");
+    setAllergies("");
+    setPrescriptionText("");
+    setImageDataUrl(null);
+    setImageFileName(null);
+    setActivePresetId(null);
+    setResult(null);
+    setErrorMessage(null);
+    setInvalidFields({});
+    setCopiedCode(false);
+  }
+
+  async function handleCopyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(true);
+      window.setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
@@ -135,6 +214,7 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
     }
 
     setSubmitting(true);
+    setAnalysisStep(0);
     try {
       const response = await fetch("/api/prescriptions/analyze", {
         method: "POST",
@@ -165,16 +245,41 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
     }
   }
 
+  const liveOrder = result
+    ? orders.find(
+        (item) =>
+          item.id === result.order_id || item.order_code === result.order_code,
+      )
+    : undefined;
+  const displayStatus: OrderStatus | null = result
+    ? (liveOrder?.status ?? result.status)
+    : null;
+  const displayPharmacistNote = liveOrder?.pharmacist_note ?? null;
+
   return (
     <div className="grid items-start gap-6 lg:grid-cols-12">
       <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 sm:p-6 lg:col-span-5">
         <div className="border-b border-[var(--border-hairline)] pb-4">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
-            Шаг 01 · Ввод назначения
-          </p>
-          <h2 className="mt-1 text-lg font-semibold text-[var(--ink-primary)]">
-            Загрузка рецепта пациента
-          </h2>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
+                Шаг 01 · Ввод назначения
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-[var(--ink-primary)]">
+                Загрузка рецепта пациента
+              </h2>
+            </div>
+            {(patientName || prescriptionText || result) && (
+              <button
+                type="button"
+                onClick={handleResetForm}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-[var(--ink-muted)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--ink-primary)]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Очистить
+              </button>
+            )}
+          </div>
           <p className="mt-1 text-sm text-[var(--ink-secondary)]">
             ИИ сверит препараты со складом, подберёт аналоги и проверит
             противопоказания.
@@ -244,7 +349,10 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
                 className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-white px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
               />
               <div id="patientName-error" className="field-error-msg">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <AlertTriangle
+                  className="h-3.5 w-3.5 shrink-0"
+                  aria-hidden="true"
+                />
                 <span>Введите минимум 2 символа.</span>
               </div>
             </div>
@@ -285,7 +393,10 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
                 className="field-input tabular-num w-full rounded-xl border border-[var(--border-strong)] bg-white px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
               />
               <div id="patientPhone-error" className="field-error-msg">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <AlertTriangle
+                  className="h-3.5 w-3.5 shrink-0"
+                  aria-hidden="true"
+                />
                 <span>Укажите корректный номер.</span>
               </div>
             </div>
@@ -402,7 +513,10 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
               role="alert"
               className="fade-enter flex items-start gap-2.5 rounded-xl border border-[#f2c6c2] bg-[var(--danger-soft)] px-3.5 py-3 text-sm text-[var(--danger)]"
             >
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
               <span>{errorMessage}</span>
             </div>
           )}
@@ -415,7 +529,7 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ИИ разбирает рецепт и сверяет склад...
+                Выполняем ИИ-проверку...
               </>
             ) : (
               <>
@@ -428,7 +542,70 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
       </section>
 
       <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 sm:p-6 lg:col-span-7">
-        {!result ? (
+        {submitting ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fade-enter space-y-5 py-2"
+          >
+            <div className="border-b border-[var(--border-hairline)] pb-4">
+              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
+                Конвейер обработки · n8n + OpenRouter
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-[var(--ink-primary)]">
+                Проверяем рецепт в реальном времени
+              </h2>
+              <p className="mt-1 text-sm text-[var(--ink-secondary)]">
+                Обычно занимает 5–12 секунд. Не закрывайте страницу.
+              </p>
+            </div>
+
+            <ol className="space-y-2.5">
+              {analysisSteps.map((step, index) => {
+                const isDone = index < analysisStep;
+                const isCurrent = index === analysisStep;
+                return (
+                  <li
+                    key={step.code}
+                    className={`flex items-start gap-3 rounded-xl border p-3.5 transition ${
+                      isCurrent
+                        ? "border-[var(--accent)] bg-[var(--accent-soft)]/60"
+                        : isDone
+                          ? "border-[#b7e4c7] bg-[var(--success-soft)]/50"
+                          : "border-[var(--border-hairline)] bg-[var(--bg-canvas)]/60 opacity-65"
+                    }`}
+                  >
+                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-white">
+                      {isDone ? (
+                        <Check
+                          className="h-3.5 w-3.5 text-[var(--success)]"
+                          aria-hidden="true"
+                        />
+                      ) : isCurrent ? (
+                        <Loader2
+                          className="h-3.5 w-3.5 animate-spin text-[var(--accent)]"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <span className="font-mono text-[10px] text-[var(--ink-muted)]">
+                          {step.code}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[var(--ink-primary)]">
+                        {step.title}
+                      </div>
+                      <p className="mt-0.5 text-xs text-[var(--ink-secondary)]">
+                        {step.detail}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        ) : !result || !displayStatus ? (
           <div className="flex min-h-80 flex-col justify-between gap-6 py-4">
             <div>
               <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--ink-muted)]">
@@ -485,23 +662,41 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
           <div key={result.order_id} className="fade-enter space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-4">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="font-mono text-base font-semibold tracking-tight text-[var(--ink-primary)]">
-                    {result.order_code}
-                  </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(result.order_code)}
+                    title="Скопировать номер заказа"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-2.5 py-1 font-mono text-sm font-semibold tracking-tight text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
+                  >
+                    <span>{result.order_code}</span>
+                    {copiedCode ? (
+                      <Check
+                        className="h-3.5 w-3.5 text-[var(--success)]"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Copy
+                        className="h-3.5 w-3.5 text-[var(--ink-muted)]"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </button>
                   <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${ORDER_STATUS_META[result.status].badgeClass}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${ORDER_STATUS_META[displayStatus].badgeClass}`}
                   >
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${ORDER_STATUS_META[result.status].dotClass}`}
+                      className={`h-1.5 w-1.5 rounded-full ${ORDER_STATUS_META[displayStatus].dotClass}`}
                       aria-hidden="true"
                     />
-                    {ORDER_STATUS_META[result.status].label}
+                    {ORDER_STATUS_META[displayStatus].label}
                   </span>
                 </div>
                 <p className="mt-1.5 text-xs text-[var(--ink-secondary)]">
                   {result.patient_name} · Аллергии: {result.allergies} ·{" "}
-                  <span className="font-mono">{SOURCE_LABELS[result.source]}</span>
+                  <span className="font-mono">
+                    {SOURCE_LABELS[result.source]}
+                  </span>
                 </p>
               </div>
 
@@ -514,6 +709,41 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
                 </div>
               </div>
             </div>
+
+            {displayStatus === "pending_approval" && (
+              <div className="fade-enter flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0d8a8] bg-[var(--warning-soft)] px-3.5 py-2.5 text-xs text-[#6d400c]">
+                <span>
+                  Карточка отправлена фармацевту в Telegram — статус обновится
+                  здесь автоматически после нажатия кнопки.
+                </span>
+                <button
+                  type="button"
+                  onClick={onOpenPharmacistPanel}
+                  className="inline-flex shrink-0 items-center gap-1 font-semibold text-[#6d400c] underline decoration-[#6d400c]/40 underline-offset-4 hover:decoration-[#6d400c]"
+                >
+                  Панель фармацевта
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+
+            {displayPharmacistNote && displayStatus !== "pending_approval" && (
+              <div
+                className={`fade-enter flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs font-medium ${
+                  displayStatus === "approved"
+                    ? "border-[#b7e4c7] bg-[var(--success-soft)] text-[var(--success)]"
+                    : "border-[#f2c6c2] bg-[var(--danger-soft)] text-[var(--danger)]"
+                }`}
+              >
+                <CheckCircle2
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  aria-hidden="true"
+                />
+                <span>
+                  <strong>Решение фармацевта:</strong> {displayPharmacistNote}
+                </span>
+              </div>
+            )}
 
             {result.safety_warnings.length > 0 ? (
               <div className="space-y-2.5">
@@ -634,9 +864,19 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
               </p>
             </div>
 
-            <p className="border-t border-[var(--border-hairline)] pt-3 text-xs leading-relaxed text-[var(--ink-muted)]">
-              {result.disclaimer}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-hairline)] pt-3">
+              <p className="max-w-lg text-xs leading-relaxed text-[var(--ink-muted)]">
+                {result.disclaimer}
+              </p>
+              <button
+                type="button"
+                onClick={handleResetForm}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-3 py-1.5 text-xs font-medium text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                Новый рецепт
+              </button>
+            </div>
           </div>
         )}
       </section>

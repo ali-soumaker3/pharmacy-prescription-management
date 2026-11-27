@@ -274,11 +274,12 @@ export function PharmacyWorkspace() {
           </div>
         </section>
 
-        <main className="pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
+        <main className="tab-panels-stack pb-[max(1.5rem,env(safe-area-inset-bottom,0px))]">
           <div
             role="tabpanel"
             aria-labelledby="tab-prescription"
             hidden={activeTab !== "prescription"}
+            className="tab-panel"
           >
             <div>
               <PrescriptionForm onAnalyzed={handlePrescriptionAnalyzed} />
@@ -289,6 +290,7 @@ export function PharmacyWorkspace() {
             role="tabpanel"
             aria-labelledby="tab-orders"
             hidden={activeTab !== "orders"}
+            className="tab-panel"
           >
             <div>
               <PharmacyDashboard
@@ -304,6 +306,7 @@ export function PharmacyWorkspace() {
             role="tabpanel"
             aria-labelledby="tab-inventory"
             hidden={activeTab !== "inventory"}
+            className="tab-panel"
           >
             <div>
               <InventoryTable inventory={inventory} />

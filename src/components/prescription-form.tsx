@@ -366,7 +366,7 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
                 />
               </label>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)]">
+              <div className="fade-enter overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)]">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/5">
                   <Image
                     src={imageDataUrl}
@@ -400,7 +400,7 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
           {errorMessage && (
             <div
               role="alert"
-              className="flex items-start gap-2.5 rounded-xl border border-[#f2c6c2] bg-[var(--danger-soft)] px-3.5 py-3 text-sm text-[var(--danger)]"
+              className="fade-enter flex items-start gap-2.5 rounded-xl border border-[#f2c6c2] bg-[var(--danger-soft)] px-3.5 py-3 text-sm text-[var(--danger)]"
             >
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{errorMessage}</span>
@@ -482,7 +482,7 @@ export function PrescriptionForm({ onAnalyzed }: PrescriptionFormProps) {
             </ol>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div key={result.order_id} className="fade-enter space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5">

@@ -187,7 +187,7 @@ export function PharmacyDashboard({
             const isBusy = busyOrderId === order.id;
 
             return (
-              <div key={order.id} className="order-card-shell">
+              <div key={order.id} className="order-card-shell fade-enter">
                 <article className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-4 sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border-hairline)] pb-3.5">
                     <div className="min-w-0">

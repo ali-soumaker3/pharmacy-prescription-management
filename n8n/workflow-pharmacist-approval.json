@@ -1,0 +1,47 @@
+{
+  "name": "Pharmacy AI - Pharmacist Approval (RU)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "approve-order",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-approve",
+      "name": "Webhook: Решение фармацевта",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ order_id: $json.body.order_id, status: $json.body.status, pharmacist_note: $json.body.pharmacist_note || null }) }}",
+        "options": {}
+      },
+      "id": "respond-approve",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [560, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Решение фармацевта": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

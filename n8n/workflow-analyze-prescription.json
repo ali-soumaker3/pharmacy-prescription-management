@@ -1,0 +1,96 @@
+{
+  "name": "Pharmacy AI - Analyze Prescription (RU)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "analyze-prescription",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-analyze",
+      "name": "Webhook: Прием рецепта",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'google/gemini-2.5-flash', response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'Ты фармацевтический ИИ-ассистент аптеки. Отвечай строго валидным JSON на русском языке без markdown. Поля JSON: medications (массив объектов: prescribed_name, dosage, schedule, duration, requires_prescription, in_stock, matched_medication_id, matched_medication_name, price_kzt, alternative_suggestion), safety_warnings (массив: severity [low|medium|high], title, details), patient_instructions (строка), total_kzt (число), requires_pharmacist_approval (boolean). Проверяй наличие и аналоги строго по переданному списку inventory. Если есть аллергия из поля allergies, обязательно добавь предупреждение severity: high.' }, { role: 'user', content: $json.body.image_data_url ? [{ type: 'text', text: 'Пациент: ' + $json.body.patient_name + '\\nАллергии: ' + $json.body.allergies + '\\nТекст рецепта: ' + ($json.body.prescription_text || 'См. фото') + '\\nСклад аптеки (JSON): ' + JSON.stringify($json.body.inventory) }, { type: 'image_url', image_url: { url: $json.body.image_data_url } }] : 'Пациент: ' + $json.body.patient_name + '\\nАллергии: ' + $json.body.allergies + '\\nТекст рецепта: ' + $json.body.prescription_text + '\\nСклад аптеки (JSON): ' + JSON.stringify($json.body.inventory) }] }) }}",
+        "options": {}
+      },
+      "id": "openrouter-analyze",
+      "name": "OpenRouter: Разбор рецепта",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookBody = $('Webhook: Прием рецепта').first().json.body;\nconst content = $input.first().json.choices?.[0]?.message?.content || '{}';\nconst parsed = JSON.parse(content);\nconst orderCode = 'RX-' + Math.floor(1000 + Math.random() * 9000);\nconst requiresApproval = Boolean(parsed.requires_pharmacist_approval);\nconst status = requiresApproval ? 'pending_approval' : 'ready_for_pickup';\nreturn [{\n  json: {\n    order_code: orderCode,\n    patient_name: webhookBody.patient_name,\n    patient_phone: webhookBody.patient_phone,\n    allergies: webhookBody.allergies || 'Не указаны',\n    raw_prescription: webhookBody.prescription_text || 'Фото рецепта',\n    status,\n    requires_pharmacist_approval: requiresApproval,\n    total_kzt: Number(parsed.total_kzt || 0),\n    medications: parsed.medications || [],\n    safety_warnings: parsed.safety_warnings || [],\n    patient_instructions: parsed.patient_instructions || 'Соблюдайте схему приёма, назначенную врачом.',\n    disclaimer: 'Информация носит справочный характер и не заменяет консультацию врача. Отпуск рецептурных препаратов выполняется только после подтверждения фармацевтом.',\n    created_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-format",
+      "name": "Code: Форматирование заказа",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-analyze",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1020, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Прием рецепта": {
+      "main": [
+        [
+          {
+            "node": "OpenRouter: Разбор рецепта",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter: Разбор рецепта": {
+      "main": [
+        [
+          {
+            "node": "Code: Форматирование заказа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Форматирование заказа": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

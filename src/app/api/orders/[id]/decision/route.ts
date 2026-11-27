@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { PharmacistDecisionSchema } from "@/lib/schemas";
+import {
+  ParsedMedicationSchema,
+  PharmacistDecisionSchema,
+} from "@/lib/schemas";
 import { getSupabaseServerClient } from "@/lib/supabase";
+import { z } from "zod";
+
+const MedicationsListSchema = z.array(ParsedMedicationSchema);
 
 export async function POST(
   request: Request,
@@ -57,19 +63,58 @@ export async function POST(
 
     const supabase = getSupabaseServerClient();
     if (supabase) {
-      const { error } = await supabase
+      const { data: updatedOrder, error: updateError } = await supabase
         .from("orders")
         .update({
           status: nextStatus,
           pharmacist_note: pharmacistNote || null,
         })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("status", "pending_approval")
+        .select("id, status, medications")
+        .maybeSingle();
 
-      if (error) {
+      if (updateError) {
         return NextResponse.json(
           { error: "Не удалось обновить статус заказа в Supabase" },
           { status: 500 },
         );
+      }
+
+      if (!updatedOrder) {
+        return NextResponse.json(
+          { error: "Заказ уже обработан или не найден" },
+          { status: 409 },
+        );
+      }
+
+      if (decision === "approve") {
+        const medsParsed = MedicationsListSchema.safeParse(
+          updatedOrder.medications,
+        );
+        if (medsParsed.success) {
+          const medicationIds = medsParsed.data
+            .filter((med) => med.in_stock && med.matched_medication_id)
+            .map((med) => med.matched_medication_id as string);
+
+          if (medicationIds.length > 0) {
+            const { data: currentMeds } = await supabase
+              .from("medications")
+              .select("id, stock_qty")
+              .in("id", medicationIds);
+
+            if (currentMeds) {
+              await Promise.all(
+                currentMeds.map((med) =>
+                  supabase
+                    .from("medications")
+                    .update({ stock_qty: Math.max(0, med.stock_qty - 1) })
+                    .eq("id", med.id),
+                ),
+              );
+            }
+          }
+        }
       }
     }
 

@@ -3,10 +3,12 @@ import {
   AnalyzePrescriptionRequestSchema,
   PrescriptionAnalysisResultSchema,
   type MedicationInventoryItem,
+  type PrescriptionAnalysisResult,
 } from "@/lib/schemas";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { DEMO_INVENTORY, MEDICAL_DISCLAIMER_RU } from "@/lib/mock-data";
 import { buildDemoAnalysis, buildOrderCode } from "@/lib/demo-analyzer";
+import { analyzeWithOpenRouterFallback } from "@/lib/openrouter";
 
 export async function POST(request: Request) {
   try {
@@ -50,7 +52,6 @@ export async function POST(request: Request) {
     }
 
     const n8nWebhookUrl = process.env.N8N_ANALYZE_WEBHOOK_URL;
-
     if (n8nWebhookUrl) {
       try {
         const headers: Record<string, string> = {
@@ -83,7 +84,8 @@ export async function POST(request: Request) {
             source: "n8n",
             patient_name: n8nPayload.patient_name ?? input.patientName,
             patient_phone: n8nPayload.patient_phone ?? input.patientPhone,
-            allergies: n8nPayload.allergies ?? (input.allergies || "Не указаны"),
+            allergies:
+              n8nPayload.allergies ?? (input.allergies || "Не указаны"),
             disclaimer: n8nPayload.disclaimer ?? MEDICAL_DISCLAIMER_RU,
             created_at: n8nPayload.created_at ?? new Date().toISOString(),
           });
@@ -96,35 +98,43 @@ export async function POST(request: Request) {
       }
     }
 
-    const fallbackResult = buildDemoAnalysis(input, inventory);
+    let result: PrescriptionAnalysisResult | null = null;
+    try {
+      result = await analyzeWithOpenRouterFallback(input, inventory);
+    } catch {
+      result = null;
+    }
+
+    if (!result) {
+      result = buildDemoAnalysis(input, inventory);
+    }
 
     if (supabase) {
       const { data: insertedOrder } = await supabase
         .from("orders")
         .insert({
-          order_code: fallbackResult.order_code,
-          patient_name: fallbackResult.patient_name,
-          patient_phone: fallbackResult.patient_phone,
-          allergies: fallbackResult.allergies,
+          order_code: result.order_code,
+          patient_name: result.patient_name,
+          patient_phone: result.patient_phone,
+          allergies: result.allergies,
           raw_prescription:
             input.prescriptionText || "Загружено изображение рецепта",
-          status: fallbackResult.status,
-          requires_pharmacist_approval:
-            fallbackResult.requires_pharmacist_approval,
-          total_kzt: fallbackResult.total_kzt,
-          medications: fallbackResult.medications,
-          safety_warnings: fallbackResult.safety_warnings,
-          patient_instructions: fallbackResult.patient_instructions,
+          status: result.status,
+          requires_pharmacist_approval: result.requires_pharmacist_approval,
+          total_kzt: result.total_kzt,
+          medications: result.medications,
+          safety_warnings: result.safety_warnings,
+          patient_instructions: result.patient_instructions,
         })
         .select("id")
         .single();
 
       if (insertedOrder?.id) {
-        fallbackResult.order_id = insertedOrder.id;
+        result.order_id = insertedOrder.id;
       }
     }
 
-    return NextResponse.json(fallbackResult, { status: 200 });
+    return NextResponse.json(result, { status: 200 });
   } catch {
     return NextResponse.json(
       { error: "Не удалось обработать рецепт. Попробуйте ещё раз." },

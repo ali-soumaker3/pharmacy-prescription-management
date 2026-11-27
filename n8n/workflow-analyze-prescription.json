@@ -1,5 +1,5 @@
 {
-  "name": "Pharmacy AI - Analyze Prescription (RU)",
+  "name": "Pharmacy AI - 1. Analyze Prescription (RU)",
   "nodes": [
     {
       "parameters": {
@@ -12,7 +12,7 @@
       "name": "Webhook: Прием рецепта",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [220, 300]
+      "position": [180, 300]
     },
     {
       "parameters": {
@@ -22,36 +22,124 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: 'google/gemini-2.5-flash', response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'Ты фармацевтический ИИ-ассистент аптеки. Отвечай строго валидным JSON на русском языке без markdown. Поля JSON: medications (массив объектов: prescribed_name, dosage, schedule, duration, requires_prescription, in_stock, matched_medication_id, matched_medication_name, price_kzt, alternative_suggestion), safety_warnings (массив: severity [low|medium|high], title, details), patient_instructions (строка), total_kzt (число), requires_pharmacist_approval (boolean). Проверяй наличие и аналоги строго по переданному списку inventory. Если есть аллергия из поля allergies, обязательно добавь предупреждение severity: high.' }, { role: 'user', content: $json.body.image_data_url ? [{ type: 'text', text: 'Пациент: ' + $json.body.patient_name + '\\nАллергии: ' + $json.body.allergies + '\\nТекст рецепта: ' + ($json.body.prescription_text || 'См. фото') + '\\nСклад аптеки (JSON): ' + JSON.stringify($json.body.inventory) }, { type: 'image_url', image_url: { url: $json.body.image_data_url } }] : 'Пациент: ' + $json.body.patient_name + '\\nАллергии: ' + $json.body.allergies + '\\nТекст рецепта: ' + $json.body.prescription_text + '\\nСклад аптеки (JSON): ' + JSON.stringify($json.body.inventory) }] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: 'google/gemini-2.5-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: 'Ты фармацевтический ИИ-ассистент аптеки. Отвечай строго валидным JSON на русском языке без markdown. Поля JSON: medications (массив объектов: prescribed_name, dosage, schedule, duration, requires_prescription, in_stock, matched_medication_id, matched_medication_name, price_kzt, alternative_suggestion), safety_warnings (массив: severity [low|medium|high], title, details), patient_instructions (строка), requires_pharmacist_approval (boolean). Проверяй наличие и аналоги строго по переданному списку inventory. Не выдумывай препараты и цены. При конфликте с аллергией добавляй предупреждение severity: high.' }, { role: 'user', content: $json.body.image_data_url ? [{ type: 'text', text: 'Пациент: ' + $json.body.patient_name + '\\nАллергии: ' + $json.body.allergies + '\\nТекст рецепта: ' + ($json.body.prescription_text || 'См. фото рецепта') + '\\nСклад аптеки (JSON): ' + JSON.stringify($json.body.inventory) }, { type: 'image_url', image_url: { url: $json.body.image_data_url } }] : 'Пациент: ' + $json.body.patient_name + '\\nАллергии: ' + $json.body.allergies + '\\nТекст рецепта: ' + $json.body.prescription_text + '\\nСклад аптеки (JSON): ' + JSON.stringify($json.body.inventory) }] }) }}",
         "options": {}
       },
       "id": "openrouter-analyze",
       "name": "OpenRouter: Разбор рецепта",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 300]
+      "position": [420, 300]
     },
     {
       "parameters": {
-        "jsCode": "const webhookBody = $('Webhook: Прием рецепта').first().json.body;\nconst content = $input.first().json.choices?.[0]?.message?.content || '{}';\nconst parsed = JSON.parse(content);\nconst orderCode = 'RX-' + Math.floor(1000 + Math.random() * 9000);\nconst requiresApproval = Boolean(parsed.requires_pharmacist_approval);\nconst status = requiresApproval ? 'pending_approval' : 'ready_for_pickup';\nreturn [{\n  json: {\n    order_code: orderCode,\n    patient_name: webhookBody.patient_name,\n    patient_phone: webhookBody.patient_phone,\n    allergies: webhookBody.allergies || 'Не указаны',\n    raw_prescription: webhookBody.prescription_text || 'Фото рецепта',\n    status,\n    requires_pharmacist_approval: requiresApproval,\n    total_kzt: Number(parsed.total_kzt || 0),\n    medications: parsed.medications || [],\n    safety_warnings: parsed.safety_warnings || [],\n    patient_instructions: parsed.patient_instructions || 'Соблюдайте схему приёма, назначенную врачом.',\n    disclaimer: 'Информация носит справочный характер и не заменяет консультацию врача. Отпуск рецептурных препаратов выполняется только после подтверждения фармацевтом.',\n    created_at: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const webhookBody = $('Webhook: Прием рецепта').first().json.body;\nconst inventory = Array.isArray(webhookBody.inventory) ? webhookBody.inventory : [];\nconst byId = new Map(inventory.map((i) => [i.id, i]));\nconst rawContent = ($input.first().json.choices?.[0]?.message?.content || '{}').trim();\nconst cleanJson = rawContent.replace(/^```json\\s*/i, '').replace(/```$/i, '').trim();\nconst parsed = JSON.parse(cleanJson);\nconst meds = (parsed.medications || []).map((med) => {\n  const matched = med.matched_medication_id ? byId.get(med.matched_medication_id) : null;\n  if (matched && matched.stock_qty > 0) {\n    return {\n      ...med,\n      in_stock: true,\n      matched_medication_id: matched.id,\n      matched_medication_name: matched.name,\n      price_kzt: matched.price_kzt,\n      requires_prescription: Boolean(med.requires_prescription || matched.requires_prescription)\n    };\n  }\n  return {\n    ...med,\n    in_stock: false,\n    matched_medication_id: null,\n    matched_medication_name: null,\n    price_kzt: null\n  };\n});\nconst warnings = Array.isArray(parsed.safety_warnings) ? parsed.safety_warnings : [];\nconst requiresApproval = Boolean(parsed.requires_pharmacist_approval) || meds.some((m) => m.requires_prescription) || warnings.some((w) => w.severity === 'high');\nconst totalKzt = meds.reduce((acc, m) => acc + (m.in_stock && m.price_kzt ? m.price_kzt : 0), 0);\nconst orderCode = 'RX-' + Math.floor(1000 + Math.random() * 9000);\nreturn [{\n  json: {\n    order_code: orderCode,\n    patient_name: webhookBody.patient_name,\n    patient_phone: webhookBody.patient_phone,\n    allergies: webhookBody.allergies || 'Не указаны',\n    raw_prescription: webhookBody.prescription_text || 'Фото рецепта',\n    status: requiresApproval ? 'pending_approval' : 'ready_for_pickup',\n    requires_pharmacist_approval: requiresApproval,\n    total_kzt: totalKzt,\n    medications: meds,\n    safety_warnings: warnings,\n    patient_instructions: parsed.patient_instructions || 'Соблюдайте схему приёма, назначенную врачом.',\n    disclaimer: 'Информация носит справочный характер и не заменяет консультацию врача. Отпуск рецептурных препаратов выполняется только после подтверждения фармацевтом.',\n    created_at: new Date().toISOString()\n  }\n}];"
       },
       "id": "code-format",
-      "name": "Code: Форматирование заказа",
+      "name": "Code: Guardrails и расчёт",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 300]
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://igzegdgmthsanxxaagdq.supabase.co/rest/v1/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ order_code: $json.order_code, patient_name: $json.patient_name, patient_phone: $json.patient_phone, allergies: $json.allergies, raw_prescription: $json.raw_prescription, status: $json.status, requires_pharmacist_approval: $json.requires_pharmacist_approval, total_kzt: $json.total_kzt, medications: $json.medications, safety_warnings: $json.safety_warnings, patient_instructions: $json.patient_instructions }) }}",
+        "options": {}
+      },
+      "id": "supabase-insert-order",
+      "name": "Supabase: Сохранить заказ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const formatted = $('Code: Guardrails и расчёт').first().json;\nconst saved = Array.isArray($input.first().json) ? $input.first().json[0] : $input.first().json;\nconst orderId = saved?.id || '';\nconst medLines = (formatted.medications || []).map((m) => `• ${m.prescribed_name} — ${m.in_stock ? m.price_kzt + ' ₸' : 'нет в наличии' + (m.alternative_suggestion ? ' (аналог: ' + m.alternative_suggestion + ')' : '')}`).join('\\n');\nconst warnLines = (formatted.safety_warnings || []).map((w) => `⚠️ [${w.severity.toUpperCase()}] ${w.title}: ${w.details}`).join('\\n');\nconst tgText = `🧾 Новый заказ ${formatted.order_code}\\n👤 Пациент: ${formatted.patient_name} (${formatted.patient_phone})\\n🚫 Аллергии: ${formatted.allergies}\\n\\n💊 Препараты:\\n${medLines}\\n\\n💰 Итого: ${formatted.total_kzt} ₸` + (warnLines ? `\\n\\n${warnLines}` : '');\nreturn [{ json: { ...formatted, order_id: orderId, telegram_text: tgText } }];"
+      },
+      "id": "code-prepare-response",
+      "name": "Code: Собрать ответ и текст Telegram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.requires_pharmacist_approval }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-rx-required",
+      "name": "IF: Нужна проверка фармацевта",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_PHARMACIST_CHAT_ID || 'REPLACE_WITH_CHAT_ID' }}",
+        "text": "={{ $json.telegram_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Одобрить заказ",
+                    "additionalFields": {
+                      "callback_data": "={{ 'approve:' + $json.order_id }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Отклонить",
+                    "additionalFields": {
+                      "callback_data": "={{ 'reject:' + $json.order_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "id": "telegram-notify",
+      "name": "Telegram: Карточка фармацевту",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1640, 200]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
+        "responseBody": "={{ JSON.stringify($('Code: Собрать ответ и текст Telegram').first().json) }}",
         "options": {}
       },
       "id": "respond-analyze",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1020, 300]
+      "position": [1880, 300]
     }
   ],
   "connections": {
@@ -70,14 +158,65 @@
       "main": [
         [
           {
-            "node": "Code: Форматирование заказа",
+            "node": "Code: Guardrails и расчёт",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code: Форматирование заказа": {
+    "Code: Guardrails и расчёт": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Сохранить заказ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Сохранить заказ": {
+      "main": [
+        [
+          {
+            "node": "Code: Собрать ответ и текст Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Собрать ответ и текст Telegram": {
+      "main": [
+        [
+          {
+            "node": "IF: Нужна проверка фармацевта",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Нужна проверка фармацевта": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Карточка фармацевту",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Карточка фармацевту": {
       "main": [
         [
           {

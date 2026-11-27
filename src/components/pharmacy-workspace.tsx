@@ -59,6 +59,20 @@ export function PharmacyWorkspace() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (activeTab === "prescription") {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadData();
+      }
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [activeTab, loadData]);
+
   function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
     let nextIndex = currentIndex;
@@ -117,6 +131,9 @@ export function PharmacyWorkspace() {
           : order,
       ),
     );
+    if (supabaseConnected) {
+      void loadData();
+    }
   }
 
   const pendingCount = orders.filter(

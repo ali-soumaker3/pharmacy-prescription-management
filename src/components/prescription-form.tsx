@@ -325,16 +325,10 @@ export function PrescriptionForm({
             <div>
               <label
                 htmlFor="patientPhone"
-                className="block text-sm font-medium text-[var(--ink-primary)]"
+                className="mb-1.5 block text-sm font-medium text-[var(--ink-primary)]"
               >
                 Телефон
               </label>
-              <span
-                id="patientPhone-hint"
-                className="mb-1 block font-mono text-[11px] text-[var(--ink-muted)]"
-              >
-                +7 707 000 00 00
-              </span>
               <input
                 id="patientPhone"
                 name="patientPhone"
@@ -350,9 +344,7 @@ export function PrescriptionForm({
                 onBlur={(event) => syncFieldValidity(event.currentTarget)}
                 aria-invalid={invalidFields.patientPhone ? "true" : "false"}
                 aria-describedby={
-                  invalidFields.patientPhone
-                    ? "patientPhone-hint patientPhone-error"
-                    : "patientPhone-hint"
+                  invalidFields.patientPhone ? "patientPhone-error" : undefined
                 }
                 placeholder="+7 707 412 88 90"
                 className="field-input tabular-num w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-input)] px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"

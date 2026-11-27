@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  FileText,
   ImagePlus,
   Loader2,
   RotateCcw,
@@ -24,7 +25,6 @@ import { PRESCRIPTION_PRESETS, type PrescriptionPreset } from "@/lib/mock-data";
 
 interface PrescriptionFormProps {
   orders: PharmacyOrderRecord[];
-  inventoryCount: number;
   onAnalyzed: (result: PrescriptionAnalysisResult) => void;
   onOpenPharmacistPanel: () => void;
 }
@@ -34,57 +34,66 @@ const ORDER_STATUS_META: Record<
   { label: string; dotClass: string; badgeClass: string }
 > = {
   pending_approval: {
-    label: "Ожидает подтверждения фармацевта",
-    dotClass: "bg-amber-600",
-    badgeClass: "border-amber-300/80 bg-[#fffaeb] text-[#9a5b13]",
+    label: "На проверке",
+    dotClass: "bg-[var(--warning)]",
+    badgeClass:
+      "border-[var(--warning-border)] bg-[var(--warning-soft)] text-[var(--warning)]",
   },
   approved: {
-    label: "Одобрено фармацевтом",
-    dotClass: "bg-emerald-700",
-    badgeClass: "border-emerald-300/80 bg-[#ecfdf3] text-[#166534]",
+    label: "Одобрено",
+    dotClass: "bg-[var(--success)]",
+    badgeClass:
+      "border-[var(--success-border)] bg-[var(--success-soft)] text-[var(--success)]",
   },
   rejected: {
-    label: "Отклонено фармацевтом",
-    dotClass: "bg-rose-700",
-    badgeClass: "border-rose-300/80 bg-[#fef3f2] text-[#b42318]",
+    label: "Отклонено",
+    dotClass: "bg-[var(--danger)]",
+    badgeClass:
+      "border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--danger)]",
   },
   ready_for_pickup: {
     label: "Готово к выдаче",
-    dotClass: "bg-[#114b46]",
-    badgeClass: "border-[#114b46]/25 bg-[#e7f1ef] text-[#114b46]",
+    dotClass: "bg-[var(--accent)]",
+    badgeClass:
+      "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent)]",
   },
-};
-
-const SOURCE_LABELS: Record<PrescriptionAnalysisResult["source"], string> = {
-  n8n: "n8n · OpenRouter",
-  openrouter_fallback: "OpenRouter (резерв)",
-  demo: "Локальный режим",
 };
 
 const SEVERITY_META = {
   high: {
-    label: "Критичный риск",
+    label: "Высокий риск",
     wrapper:
-      "border-l-4 border-l-[#b42318] border-[#f2c6c2] bg-[#fef3f2] text-[#7a1b14]",
-    tag: "bg-[#b42318] text-white",
+      "border-l-4 border-l-[var(--danger)] border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--ink-primary)]",
+    tag: "bg-[var(--danger)] text-white",
   },
   medium: {
     label: "Внимание",
     wrapper:
-      "border-l-4 border-l-[#b56a12] border-[#f0d8a8] bg-[#fffaeb] text-[#6d400c]",
-    tag: "bg-[#b56a12] text-white",
+      "border-l-4 border-l-[var(--warning)] border-[var(--warning-border)] bg-[var(--warning-soft)] text-[var(--ink-primary)]",
+    tag: "bg-[var(--warning)] text-white",
   },
   low: {
-    label: "Рекомендация",
+    label: "Примечание",
     wrapper:
-      "border-l-4 border-l-[#114b46] border-[#c5ddd9] bg-[#eef6f5] text-[#103c38]",
-    tag: "bg-[#114b46] text-white",
+      "border-l-4 border-l-[var(--accent)] border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--ink-primary)]",
+    tag: "bg-[var(--accent)] text-[var(--accent-ink)]",
   },
 };
 
+const ANALYSIS_STEPS = [
+  "Разбор текста и дозировок",
+  "Проверка наличия на складе",
+  "Проверка противопоказаний",
+  "Оформление заказа",
+];
+
+const AUTO_TELEGRAM_NOTES = new Set([
+  "Одобрено фармацевтом в Telegram",
+  "Отклонено фармацевтом в Telegram",
+]);
+
 export function PrescriptionForm({
   orders,
-  inventoryCount,
   onAnalyzed,
   onOpenPharmacistPanel,
 }: PrescriptionFormProps) {
@@ -103,29 +112,6 @@ export function PrescriptionForm({
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>(
     {},
   );
-
-  const analysisSteps = [
-    {
-      code: "01",
-      title: "Распознавание рецепта",
-      detail: "Извлекаем препараты, дозировки и схему приёма через OpenRouter",
-    },
-    {
-      code: "02",
-      title: "Сверка со складом аптеки",
-      detail: `Проверяем наличие среди ${inventoryCount || 28} препаратов в Supabase и ищем аналоги`,
-    },
-    {
-      code: "03",
-      title: "Контроль безопасности",
-      detail: "Анализируем аллергии пациента и лекарственные взаимодействия",
-    },
-    {
-      code: "04",
-      title: "Оформление и уведомление",
-      detail: "Сохраняем заказ и отправляем карточку фармацевту в Telegram",
-    },
-  ];
 
   useEffect(() => {
     if (!submitting) {
@@ -156,7 +142,7 @@ export function PrescriptionForm({
     }
 
     if (file.size > 4 * 1024 * 1024) {
-      setErrorMessage("Размер фото рецепта не должен превышать 4 МБ.");
+      setErrorMessage("Размер файла не должен превышать 4 МБ.");
       return;
     }
 
@@ -209,7 +195,7 @@ export function PrescriptionForm({
     setErrorMessage(null);
 
     if (!prescriptionText.trim() && !imageDataUrl) {
-      setErrorMessage("Введите текст рецепта или загрузите фотографию бланка.");
+      setErrorMessage("Введите текст рецепта или прикрепите фото.");
       return;
     }
 
@@ -239,7 +225,7 @@ export function PrescriptionForm({
       setResult(payload);
       onAnalyzed(payload);
     } catch {
-      setErrorMessage("Сетевая ошибка при отправке рецепта. Попробуйте снова.");
+      setErrorMessage("Сетевая ошибка. Попробуйте ещё раз.");
     } finally {
       setSubmitting(false);
     }
@@ -254,61 +240,48 @@ export function PrescriptionForm({
   const displayStatus: OrderStatus | null = result
     ? (liveOrder?.status ?? result.status)
     : null;
-  const displayPharmacistNote = liveOrder?.pharmacist_note ?? null;
+  const rawNote = liveOrder?.pharmacist_note ?? null;
+  const customNote =
+    rawNote && !AUTO_TELEGRAM_NOTES.has(rawNote) ? rawNote : null;
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-12">
       <section className="rounded-2xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] p-5 sm:p-6 lg:col-span-5">
-        <div className="border-b border-[var(--border-hairline)] pb-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
-                Шаг 01 · Ввод назначения
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-[var(--ink-primary)]">
-                Загрузка рецепта пациента
-              </h2>
-            </div>
-            {(patientName || prescriptionText || result) && (
-              <button
-                type="button"
-                onClick={handleResetForm}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-[var(--ink-muted)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--ink-primary)]"
-              >
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                Очистить
-              </button>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-[var(--ink-secondary)]">
-            ИИ сверит препараты со складом, подберёт аналоги и проверит
-            противопоказания.
-          </p>
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--border-hairline)] pb-4">
+          <h2 className="text-base font-semibold text-[var(--ink-primary)]">
+            Новый рецепт
+          </h2>
+          {(patientName || prescriptionText || result) && (
+            <button
+              type="button"
+              onClick={handleResetForm}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-[var(--ink-muted)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--ink-primary)]"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              Очистить
+            </button>
+          )}
+        </div>
 
-          <div className="mt-4">
-            <span className="mb-2 block text-xs font-medium text-[var(--ink-muted)]">
-              Быстрый тестовый сценарий:
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {PRESCRIPTION_PRESETS.map((preset) => {
-                const isSelected = activePresetId === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => applyPreset(preset)}
-                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
-                      isSelected
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
-                        : "border-[var(--border-hairline)] bg-[var(--bg-canvas)] text-[var(--ink-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--ink-primary)]"
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-[var(--ink-muted)]">Примеры:</span>
+          {PRESCRIPTION_PRESETS.map((preset) => {
+            const isSelected = activePresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                  isSelected
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "border-[var(--border-hairline)] bg-[var(--bg-canvas)] text-[var(--ink-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--ink-primary)]"
+                }`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
         </div>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
@@ -316,16 +289,10 @@ export function PrescriptionForm({
             <div>
               <label
                 htmlFor="patientName"
-                className="block text-sm font-medium text-[var(--ink-primary)]"
+                className="mb-1.5 block text-sm font-medium text-[var(--ink-primary)]"
               >
-                ФИО пациента
+                Пациент
               </label>
-              <span
-                id="patientName-hint"
-                className="mb-1.5 block text-xs text-[var(--ink-muted)]"
-              >
-                Имя для карточки заказа
-              </span>
               <input
                 id="patientName"
                 name="patientName"
@@ -341,19 +308,17 @@ export function PrescriptionForm({
                 onBlur={(event) => syncFieldValidity(event.currentTarget)}
                 aria-invalid={invalidFields.patientName ? "true" : "false"}
                 aria-describedby={
-                  invalidFields.patientName
-                    ? "patientName-hint patientName-error"
-                    : "patientName-hint"
+                  invalidFields.patientName ? "patientName-error" : undefined
                 }
                 placeholder="Айсана Батырова"
-                className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-white px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
+                className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-input)] px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
               />
               <div id="patientName-error" className="field-error-msg">
                 <AlertTriangle
                   className="h-3.5 w-3.5 shrink-0"
                   aria-hidden="true"
                 />
-                <span>Введите минимум 2 символа.</span>
+                <span>Минимум 2 символа.</span>
               </div>
             </div>
 
@@ -366,9 +331,9 @@ export function PrescriptionForm({
               </label>
               <span
                 id="patientPhone-hint"
-                className="mb-1.5 block text-xs text-[var(--ink-muted)]"
+                className="mb-1 block font-mono text-[11px] text-[var(--ink-muted)]"
               >
-                Формат: +7 707 000 00 00
+                +7 707 000 00 00
               </span>
               <input
                 id="patientPhone"
@@ -390,14 +355,14 @@ export function PrescriptionForm({
                     : "patientPhone-hint"
                 }
                 placeholder="+7 707 412 88 90"
-                className="field-input tabular-num w-full rounded-xl border border-[var(--border-strong)] bg-white px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
+                className="field-input tabular-num w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-input)] px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
               />
               <div id="patientPhone-error" className="field-error-msg">
                 <AlertTriangle
                   className="h-3.5 w-3.5 shrink-0"
                   aria-hidden="true"
                 />
-                <span>Укажите корректный номер.</span>
+                <span>Некорректный номер.</span>
               </div>
             </div>
           </div>
@@ -405,69 +370,51 @@ export function PrescriptionForm({
           <div>
             <label
               htmlFor="allergies"
-              className="block text-sm font-medium text-[var(--ink-primary)]"
+              className="mb-1.5 block text-sm font-medium text-[var(--ink-primary)]"
             >
-              Аллергии и противопоказания
+              Аллергии
             </label>
-            <span
-              id="allergies-hint"
-              className="mb-1.5 block text-xs text-[var(--ink-muted)]"
-            >
-              Укажите вещества для автоматической проверки конфликтов (например:
-              пенициллин, аспирин)
-            </span>
             <input
               id="allergies"
               name="allergies"
               type="text"
               value={allergies}
               onChange={(event) => setAllergies(event.target.value)}
-              aria-describedby="allergies-hint"
-              placeholder="Нет или перечислите через запятую"
-              className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-white px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
+              placeholder="Нет или через запятую"
+              className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-input)] px-3.5 py-2 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
             />
           </div>
 
           <div>
             <label
               htmlFor="prescriptionText"
-              className="block text-sm font-medium text-[var(--ink-primary)]"
+              className="mb-1.5 block text-sm font-medium text-[var(--ink-primary)]"
             >
-              Текст назначения / рецепта
+              Назначение
             </label>
-            <span
-              id="prescriptionText-hint"
-              className="mb-1.5 block text-xs text-[var(--ink-muted)]"
-            >
-              Препараты, дозировка и режим приёма (можно дополнить фото ниже)
-            </span>
             <textarea
               id="prescriptionText"
               name="prescriptionText"
               rows={4}
               value={prescriptionText}
               onChange={(event) => setPrescriptionText(event.target.value)}
-              aria-describedby="prescriptionText-hint"
-              placeholder="Rp: Амоксициллин 500 мг по 1 капсуле 2 раза в день 7 дней..."
-              className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-white px-3.5 py-2.5 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
+              placeholder="Rp: Амоксициллин 500 мг — 1 капс. 2 раза в день..."
+              className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-input)] px-3.5 py-2.5 text-[var(--ink-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
             />
           </div>
 
           <div>
-            <span className="mb-1.5 block text-sm font-medium text-[var(--ink-primary)]">
-              Фотография бланка рецепта
-            </span>
             {!imageDataUrl ? (
-              <label className="flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-canvas)] px-4 py-3 text-sm text-[var(--ink-secondary)] transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/50">
-                <span className="inline-flex items-center gap-2.5 font-medium text-[var(--ink-primary)]">
+              <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--bg-canvas)]/70 px-4 py-2.5 text-sm text-[var(--ink-secondary)] transition hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/50">
+                <span className="inline-flex items-center gap-2 font-medium text-[var(--ink-primary)]">
                   <ImagePlus
                     className="h-4 w-4 text-[var(--accent)]"
                     aria-hidden="true"
                   />
-                  Прикрепить фото (JPG / PNG до 4 МБ)
+                  Прикрепить фото бланка
                 </span>
                 <span className="font-mono text-xs text-[var(--ink-muted)]">
-                  Vision AI
+                  до 4 МБ
                 </span>
                 <input
                   type="file"
@@ -481,13 +428,13 @@ export function PrescriptionForm({
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/5">
                   <Image
                     src={imageDataUrl}
-                    alt="Превью загруженного бланка рецепта"
+                    alt="Превью бланка рецепта"
                     fill
                     unoptimized
                     className="object-contain"
                   />
                 </div>
-                <div className="flex items-center justify-between gap-3 border-t border-[var(--border-hairline)] px-3.5 py-2.5 text-xs">
+                <div className="flex items-center justify-between gap-3 border-t border-[var(--border-hairline)] px-3.5 py-2 text-xs">
                   <span className="min-w-0 truncate font-medium text-[var(--ink-primary)]">
                     {imageFileName}
                   </span>
@@ -497,7 +444,7 @@ export function PrescriptionForm({
                       setImageDataUrl(null);
                       setImageFileName(null);
                     }}
-                    aria-label="Удалить прикреплённое фото рецепта"
+                    aria-label="Удалить фото рецепта"
                     className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-[var(--danger)] hover:bg-[var(--danger-soft)]"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -511,7 +458,7 @@ export function PrescriptionForm({
           {errorMessage && (
             <div
               role="alert"
-              className="fade-enter flex items-start gap-2.5 rounded-xl border border-[#f2c6c2] bg-[var(--danger-soft)] px-3.5 py-3 text-sm text-[var(--danger)]"
+              className="fade-enter flex items-start gap-2.5 rounded-xl border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3.5 py-3 text-sm text-[var(--danger)]"
             >
               <AlertTriangle
                 className="mt-0.5 h-4 w-4 shrink-0"
@@ -524,16 +471,16 @@ export function PrescriptionForm({
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-[var(--accent-ink)] transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Выполняем ИИ-проверку...
+                Проверка рецепта...
               </>
             ) : (
               <>
-                <span>Проверить рецепт и оформить заказ</span>
+                <span>Проверить рецепт</span>
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </>
             )}
@@ -546,117 +493,61 @@ export function PrescriptionForm({
           <div
             role="status"
             aria-live="polite"
-            className="fade-enter space-y-5 py-2"
+            className="fade-enter space-y-4 py-2"
           >
-            <div className="border-b border-[var(--border-hairline)] pb-4">
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
-                Конвейер обработки · n8n + OpenRouter
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-[var(--ink-primary)]">
-                Проверяем рецепт в реальном времени
-              </h2>
-              <p className="mt-1 text-sm text-[var(--ink-secondary)]">
-                Обычно занимает 5–12 секунд. Не закрывайте страницу.
-              </p>
-            </div>
+            <h2 className="text-base font-semibold text-[var(--ink-primary)]">
+              Обработка рецепта
+            </h2>
 
-            <ol className="space-y-2.5">
-              {analysisSteps.map((step, index) => {
+            <ol className="space-y-2">
+              {ANALYSIS_STEPS.map((label, index) => {
                 const isDone = index < analysisStep;
                 const isCurrent = index === analysisStep;
                 return (
                   <li
-                    key={step.code}
-                    className={`flex items-start gap-3 rounded-xl border p-3.5 transition ${
+                    key={label}
+                    className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 text-sm transition ${
                       isCurrent
-                        ? "border-[var(--accent)] bg-[var(--accent-soft)]/60"
+                        ? "border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--ink-primary)]"
                         : isDone
-                          ? "border-[#b7e4c7] bg-[var(--success-soft)]/50"
-                          : "border-[var(--border-hairline)] bg-[var(--bg-canvas)]/60 opacity-65"
+                          ? "border-[var(--success-border)] bg-[var(--success-soft)] text-[var(--ink-primary)]"
+                          : "border-[var(--border-hairline)] bg-[var(--bg-canvas)]/50 text-[var(--ink-muted)]"
                     }`}
                   >
-                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border-hairline)] bg-white">
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center">
                       {isDone ? (
                         <Check
-                          className="h-3.5 w-3.5 text-[var(--success)]"
+                          className="h-4 w-4 text-[var(--success)]"
                           aria-hidden="true"
                         />
                       ) : isCurrent ? (
                         <Loader2
-                          className="h-3.5 w-3.5 animate-spin text-[var(--accent)]"
+                          className="h-4 w-4 animate-spin text-[var(--accent)]"
                           aria-hidden="true"
                         />
                       ) : (
-                        <span className="font-mono text-[10px] text-[var(--ink-muted)]">
-                          {step.code}
+                        <span className="font-mono text-xs">
+                          0{index + 1}
                         </span>
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-[var(--ink-primary)]">
-                        {step.title}
-                      </div>
-                      <p className="mt-0.5 text-xs text-[var(--ink-secondary)]">
-                        {step.detail}
-                      </p>
-                    </div>
+                    <span className="font-medium">{label}</span>
                   </li>
                 );
               })}
             </ol>
           </div>
         ) : !result || !displayStatus ? (
-          <div className="flex min-h-80 flex-col justify-between gap-6 py-4">
-            <div>
-              <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--ink-muted)]">
-                Шаг 02 · Клиническая верификация
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-[var(--ink-primary)]">
-                Лист проверки рецепта
-              </h2>
-              <p className="mt-1 max-w-lg text-sm text-[var(--ink-secondary)]">
-                Выберите один из готовых сценариев слева или введите собственный
-                рецепт. Здесь появится полный разбор назначений и решение по
-                отпуску.
-              </p>
+          <div className="flex min-h-72 flex-col items-center justify-center text-center">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] text-[var(--ink-muted)]">
+              <FileText className="h-5 w-5" aria-hidden="true" />
             </div>
-
-            <ol className="grid gap-3 sm:grid-cols-3">
-              <li className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] p-3.5">
-                <span className="font-mono text-xs font-semibold text-[var(--accent)]">
-                  01
-                </span>
-                <div className="mt-1.5 text-sm font-semibold text-[var(--ink-primary)]">
-                  Извлечение JSON
-                </div>
-                <p className="mt-1 text-xs text-[var(--ink-secondary)]">
-                  Распознавание текста и фото рецепта в дозировки, курс и режим
-                  приёма.
-                </p>
-              </li>
-              <li className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] p-3.5">
-                <span className="font-mono text-xs font-semibold text-[var(--accent)]">
-                  02
-                </span>
-                <div className="mt-1.5 text-sm font-semibold text-[var(--ink-primary)]">
-                  Склад и аналоги
-                </div>
-                <p className="mt-1 text-xs text-[var(--ink-secondary)]">
-                  Проверка остатков по базе аптеки и подбор дженериков в наличии.
-                </p>
-              </li>
-              <li className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] p-3.5">
-                <span className="font-mono text-xs font-semibold text-[var(--accent)]">
-                  03
-                </span>
-                <div className="mt-1.5 text-sm font-semibold text-[var(--ink-primary)]">
-                  Контроль фармацевта
-                </div>
-                <p className="mt-1 text-xs text-[var(--ink-secondary)]">
-                  Рецептурные и конфликтные заказы уходят в Telegram на одобрение.
-                </p>
-              </li>
-            </ol>
+            <h2 className="text-base font-semibold text-[var(--ink-primary)]">
+              Лист проверки
+            </h2>
+            <p className="mt-1 max-w-xs text-sm text-[var(--ink-muted)]">
+              Заполните форму слева и отправьте рецепт.
+            </p>
           </div>
         ) : (
           <div key={result.order_id} className="fade-enter space-y-5">
@@ -666,8 +557,8 @@ export function PrescriptionForm({
                   <button
                     type="button"
                     onClick={() => handleCopyCode(result.order_code)}
-                    title="Скопировать номер заказа"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-2.5 py-1 font-mono text-sm font-semibold tracking-tight text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
+                    title="Скопировать номер"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-2.5 py-1 font-mono text-sm font-semibold text-[var(--ink-primary)] transition hover:border-[var(--border-strong)]"
                   >
                     <span>{result.order_code}</span>
                     {copiedCode ? (
@@ -693,16 +584,13 @@ export function PrescriptionForm({
                   </span>
                 </div>
                 <p className="mt-1.5 text-xs text-[var(--ink-secondary)]">
-                  {result.patient_name} · Аллергии: {result.allergies} ·{" "}
-                  <span className="font-mono">
-                    {SOURCE_LABELS[result.source]}
-                  </span>
+                  {result.patient_name} · Аллергии: {result.allergies}
                 </p>
               </div>
 
               <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-3.5 py-2 text-right">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-                  К оплате (в наличии)
+                <div className="text-[11px] uppercase tracking-wide text-[var(--ink-muted)]">
+                  Итого
                 </div>
                 <div className="font-mono tabular-num text-lg font-semibold text-[var(--ink-primary)]">
                   {result.total_kzt.toLocaleString("ru-RU")} ₸
@@ -711,48 +599,36 @@ export function PrescriptionForm({
             </div>
 
             {displayStatus === "pending_approval" && (
-              <div className="fade-enter flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0d8a8] bg-[var(--warning-soft)] px-3.5 py-2.5 text-xs text-[#6d400c]">
-                <span>
-                  Карточка отправлена фармацевту в Telegram — статус обновится
-                  здесь автоматически после нажатия кнопки.
-                </span>
+              <div className="fade-enter flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-soft)] px-3.5 py-2.5 text-xs text-[var(--warning)]">
+                <span>Ожидает подтверждения фармацевта</span>
                 <button
                   type="button"
                   onClick={onOpenPharmacistPanel}
-                  className="inline-flex shrink-0 items-center gap-1 font-semibold text-[#6d400c] underline decoration-[#6d400c]/40 underline-offset-4 hover:decoration-[#6d400c]"
+                  className="inline-flex shrink-0 items-center gap-1 font-semibold underline decoration-current/40 underline-offset-4 hover:decoration-current"
                 >
-                  Панель фармацевта
+                  Открыть в заказах
                   <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </div>
             )}
 
-            {displayPharmacistNote && displayStatus !== "pending_approval" && (
-              <div
-                className={`fade-enter flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs font-medium ${
-                  displayStatus === "approved"
-                    ? "border-[#b7e4c7] bg-[var(--success-soft)] text-[var(--success)]"
-                    : "border-[#f2c6c2] bg-[var(--danger-soft)] text-[var(--danger)]"
-                }`}
-              >
-                <CheckCircle2
-                  className="mt-0.5 h-4 w-4 shrink-0"
-                  aria-hidden="true"
-                />
-                <span>
-                  <strong>Решение фармацевта:</strong> {displayPharmacistNote}
-                </span>
+            {customNote && displayStatus !== "pending_approval" && (
+              <div className="fade-enter rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-3.5 py-2.5 text-xs text-[var(--ink-secondary)]">
+                <strong className="text-[var(--ink-primary)]">
+                  Комментарий фармацевта:
+                </strong>{" "}
+                {customNote}
               </div>
             )}
 
             {result.safety_warnings.length > 0 ? (
               <div className="space-y-2.5">
-                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-[var(--ink-secondary)]">
+                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em] text-[var(--ink-muted)]">
                   <ShieldAlert
                     className="h-4 w-4 text-[var(--danger)]"
                     aria-hidden="true"
                   />
-                  Контроль безопасности ({result.safety_warnings.length})
+                  Предупреждения ({result.safety_warnings.length})
                 </h3>
                 {result.safety_warnings.map((warning, index) => {
                   const meta = SEVERITY_META[warning.severity];
@@ -771,7 +647,7 @@ export function PrescriptionForm({
                           {warning.title}
                         </span>
                       </div>
-                      <p className="mt-1.5 text-xs leading-relaxed opacity-95">
+                      <p className="mt-1.5 text-xs leading-relaxed text-[var(--ink-secondary)]">
                         {warning.details}
                       </p>
                     </div>
@@ -779,18 +655,15 @@ export function PrescriptionForm({
                 })}
               </div>
             ) : (
-              <div className="flex items-center gap-2.5 rounded-xl border border-[#b7e4c7] bg-[var(--success-soft)] px-3.5 py-2.5 text-xs font-medium text-[var(--success)]">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--success-border)] bg-[var(--success-soft)] px-3.5 py-2.5 text-xs font-medium text-[var(--success)]">
                 <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>
-                  Конфликтов с аллергиями и критичных взаимодействий не
-                  выявлено.
-                </span>
+                <span>Противопоказаний не выявлено.</span>
               </div>
             )}
 
             <div className="space-y-2.5">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--ink-secondary)]">
-                Назначенные препараты ({result.medications.length})
+              <h3 className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--ink-muted)]">
+                Препараты ({result.medications.length})
               </h3>
               <ul className="divide-y divide-[var(--border-hairline)] overflow-hidden rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)]/55">
                 {result.medications.map((med, index) => (
@@ -804,7 +677,7 @@ export function PrescriptionForm({
                           <span
                             className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-medium ${
                               med.requires_prescription
-                                ? "bg-[#fde8e6] text-[#b42318]"
+                                ? "bg-[var(--danger-soft)] text-[var(--danger)]"
                                 : "bg-[var(--bg-subtle)] text-[var(--ink-secondary)]"
                             }`}
                           >
@@ -845,8 +718,10 @@ export function PrescriptionForm({
                     </div>
 
                     {med.alternative_suggestion && (
-                      <div className="mt-2.5 rounded-lg border border-[#c5ddd9] bg-[#eef6f5] px-3 py-2 text-xs text-[#103c38]">
-                        <span className="font-semibold">Рекомендация:</span>{" "}
+                      <div className="mt-2.5 rounded-lg border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--ink-primary)]">
+                        <span className="font-semibold text-[var(--accent)]">
+                          Аналог:
+                        </span>{" "}
                         {med.alternative_suggestion}
                       </div>
                     )}
@@ -855,18 +730,18 @@ export function PrescriptionForm({
               </ul>
             </div>
 
-            <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] p-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--ink-muted)]">
-                Памятка пациенту
+            <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-canvas)] p-3.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--ink-muted)]">
+                Памятка
               </div>
-              <p className="mt-1.5 text-sm leading-relaxed text-[var(--ink-primary)]">
+              <p className="mt-1 text-sm leading-relaxed text-[var(--ink-primary)]">
                 {result.patient_instructions}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-hairline)] pt-3">
-              <p className="max-w-lg text-xs leading-relaxed text-[var(--ink-muted)]">
-                {result.disclaimer}
+              <p className="max-w-lg text-xs text-[var(--ink-muted)]">
+                Справочная проверка. Не заменяет консультацию врача.
               </p>
               <button
                 type="button"

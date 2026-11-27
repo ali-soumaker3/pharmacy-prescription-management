@@ -17,17 +17,22 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ФармаКонтроль — Проверка рецептов и управление аптекой",
-  description:
-    "Цифровая система распознавания рецептов, контроля лекарственных взаимодействий и подтверждения отпуска фармацевтом.",
+  title: "ФармаКонтроль",
+  description: "Проверка рецептов, учёт остатков и подтверждение заказов аптеки.",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#F6F5F0",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#E9E7DF" },
+    { media: "(prefers-color-scheme: dark)", color: "#121514" },
+  ],
 };
+
+const THEME_INIT_SCRIPT =
+  'try{var m=document.querySelector(\'meta[name="color-scheme"]\');var s=localStorage.getItem("color-scheme");if(m&&(s==="light"||s==="dark"))m.content=s;}catch(e){}';
 
 export default function RootLayout({
   children,
@@ -37,8 +42,13 @@ export default function RootLayout({
   return (
     <html
       lang="ru"
+      suppressHydrationWarning
       className={`${golosText.variable} ${jetBrainsMono.variable}`}
     >
+      <head>
+        <meta name="color-scheme" content="light dark" />
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-dvh bg-[var(--bg-canvas)] font-sans text-[var(--ink-primary)] antialiased">
         {children}
       </body>

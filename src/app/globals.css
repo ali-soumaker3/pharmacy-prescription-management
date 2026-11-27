@@ -6,24 +6,40 @@
 }
 
 :root {
-  --bg-canvas: #f6f5f0;
-  --bg-surface: #ffffff;
-  --bg-subtle: #efede6;
-  --border-hairline: #e4e1d8;
-  --border-strong: #cfc9bc;
-  --ink-primary: #151918;
-  --ink-secondary: #565e5b;
-  --ink-muted: #767f7b;
-  --accent: #114b46;
-  --accent-hover: #0c3935;
-  --accent-soft: #e7f1ef;
-  --danger: #b42318;
-  --danger-soft: #fef3f2;
-  --warning: #9a5b13;
-  --warning-soft: #fffaeb;
-  --success: #166534;
-  --success-soft: #ecfdf3;
+  color-scheme: light dark;
+  --bg-canvas: light-dark(#e9e7df, #111413);
+  --bg-surface: light-dark(#f3f1eb, #191d1c);
+  --bg-input: light-dark(#faf9f5, #141817);
+  --bg-subtle: light-dark(#e1ded4, #222826);
+  --bg-hover: light-dark(#ece9e0, #1f2523);
+  --border-hairline: light-dark(#d4d0c4, #29312e);
+  --border-strong: light-dark(#bdb7a7, #3a4440);
+  --ink-primary: light-dark(#1c201f, #e5e8e6);
+  --ink-secondary: light-dark(#4d5552, #a5afa9);
+  --ink-muted: light-dark(#6c7571, #78837e);
+  --accent: light-dark(#14534d, #4fa89c);
+  --accent-hover: light-dark(#0e3f3a, #63bdb0);
+  --accent-ink: light-dark(#f6f5f0, #0d1614);
+  --accent-soft: light-dark(#dae9e6, #18302c);
+  --accent-border: light-dark(#b4d1cb, #274f48);
+  --danger: light-dark(#a6261d, #f07b72);
+  --danger-soft: light-dark(#f5e2e0, #2e1918);
+  --danger-border: light-dark(#e4b9b4, #572b28);
+  --warning: light-dark(#8a5210, #e5aa54);
+  --warning-soft: light-dark(#f3ead7, #2b2214);
+  --warning-border: light-dark(#dec899, #544121);
+  --success: light-dark(#185e34, #5ec489);
+  --success-soft: light-dark(#dcece1, #162b1f);
+  --success-border: light-dark(#b1d6be, #264d36);
   --target-size: 24px;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
 }
 
 @media (pointer: coarse) {
@@ -33,16 +49,11 @@
 }
 
 html {
-  scroll-padding-top: calc(7.5rem + env(safe-area-inset-top, 0px));
+  scroll-padding-top: calc(7rem + env(safe-area-inset-top, 0px));
 }
 
 body {
   overflow-wrap: break-word;
-  background-image: radial-gradient(
-    circle at 100% 0%,
-    rgba(17, 75, 70, 0.045),
-    transparent 42%
-  );
 }
 
 h1,
@@ -77,7 +88,7 @@ video {
 }
 
 .page-title {
-  font-size: clamp(1.25rem, 1.05rem + 0.85vw, 1.75rem);
+  font-size: clamp(1.125rem, 1rem + 0.65vw, 1.45rem);
   line-height: 1.2;
   letter-spacing: -0.02em;
 }
@@ -97,7 +108,7 @@ video {
 }
 
 .field-input {
-  min-block-size: 2.75rem;
+  min-block-size: 2.625rem;
   font-size: 1rem;
   line-height: 1.4;
 }
@@ -164,9 +175,9 @@ video {
   position: relative;
   flex: none;
   scroll-snap-align: start;
-  min-block-size: 2.875rem;
-  padding: 0.625rem 0.9rem;
-  font-size: 0.9375rem;
+  min-block-size: 2.75rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.9rem;
   font-weight: 500;
   color: var(--ink-secondary);
   cursor: pointer;
@@ -232,7 +243,7 @@ video {
   }
 
   .fade-enter {
-    animation: fade-enter-kf 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: fade-enter-kf 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 }
 
@@ -245,6 +256,23 @@ video {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.help-dialog {
+  margin: auto;
+  max-inline-size: min(32rem, calc(100dvw - 2rem));
+  width: 100%;
+  border: 1px solid var(--border-hairline);
+  border-radius: 1rem;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  padding: 0;
+  box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.28);
+}
+
+.help-dialog::backdrop {
+  background: rgba(12, 16, 15, 0.52);
+  backdrop-filter: blur(3px);
 }
 
 .order-card-shell {
@@ -305,7 +333,7 @@ video {
 
 .inventory-table thead th {
   padding: 0.8rem 1rem;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -319,21 +347,26 @@ video {
   inset-inline-start: 0;
   z-index: 1;
   background: var(--bg-surface);
-  padding: 0.875rem 1rem;
+  padding: 0.85rem 1rem;
   font-weight: 600;
   color: var(--ink-primary);
-  border-bottom: 1px solid #f0eee8;
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .inventory-table tbody td {
-  padding: 0.875rem 1rem;
+  padding: 0.85rem 1rem;
   color: var(--ink-secondary);
-  border-bottom: 1px solid #f0eee8;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.inventory-table tbody tr:last-child th,
+.inventory-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .inventory-table tbody tr:hover th,
 .inventory-table tbody tr:hover td {
-  background: #faf9f5;
+  background: var(--bg-hover);
 }
 
 @container inventory (inline-size < 42rem) {

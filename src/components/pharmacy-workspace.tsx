@@ -7,7 +7,16 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { ClipboardCheck, Cross, FileSearch, Package } from "lucide-react";
+import {
+  CircleHelp,
+  ClipboardCheck,
+  Cross,
+  FileSearch,
+  Moon,
+  Package,
+  Sun,
+  X,
+} from "lucide-react";
 import type {
   MedicationInventoryItem,
   OrderStatus,
@@ -19,12 +28,40 @@ import { PharmacyDashboard } from "@/components/pharmacy-dashboard";
 import { InventoryTable } from "@/components/inventory-table";
 
 type WorkspaceTab = "prescription" | "orders" | "inventory";
+type ResolvedTheme = "light" | "dark";
 
 const TABS: { id: WorkspaceTab; label: string }[] = [
-  { id: "prescription", label: "Проверка рецепта" },
-  { id: "orders", label: "Панель фармацевта" },
-  { id: "inventory", label: "Склад аптеки" },
+  { id: "prescription", label: "Рецепт" },
+  { id: "orders", label: "Заказы" },
+  { id: "inventory", label: "Склад" },
 ];
+
+function getSystemTheme(): ResolvedTheme {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function readStoredTheme(): ResolvedTheme | null {
+  try {
+    const stored = localStorage.getItem("color-scheme");
+    return stored === "light" || stored === "dark" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function applyThemeMeta(value: ResolvedTheme | null) {
+  const meta = document.querySelector<HTMLMetaElement>(
+    'meta[name="color-scheme"]',
+  );
+  if (meta) {
+    meta.content = value ?? "light dark";
+  }
+}
 
 export function PharmacyWorkspace() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("prescription");
@@ -34,7 +71,9 @@ export function PharmacyWorkspace() {
   const [supabaseConnected, setSupabaseConnected] = useState(false);
   const [n8nConfigured, setN8nConfigured] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const helpDialogRef = useRef<HTMLDialogElement | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -65,6 +104,61 @@ export function PharmacyWorkspace() {
   }, [loadData]);
 
   useEffect(() => {
+    const syncTheme = () => {
+      const stored = readStoredTheme();
+      applyThemeMeta(stored);
+      setResolvedTheme(stored ?? getSystemTheme());
+    };
+
+    syncTheme();
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleMediaChange = () => {
+      const stored = readStoredTheme();
+      if (!stored) {
+        setResolvedTheme(mediaQuery.matches ? "dark" : "light");
+      }
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "color-scheme") {
+        syncTheme();
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleMediaChange);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      mediaQuery.removeEventListener("change", handleMediaChange);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    const dialog = helpDialogRef.current;
+    if (!dialog || "closedBy" in HTMLDialogElement.prototype) {
+      return;
+    }
+
+    const handleBackdropClick = (event: MouseEvent) => {
+      if (event.target !== dialog) {
+        return;
+      }
+      const rect = dialog.getBoundingClientRect();
+      const inside =
+        rect.top <= event.clientY &&
+        event.clientY <= rect.top + rect.height &&
+        rect.left <= event.clientX &&
+        event.clientX <= rect.left + rect.width;
+      if (!inside) {
+        dialog.close();
+      }
+    };
+
+    dialog.addEventListener("click", handleBackdropClick);
+    return () => dialog.removeEventListener("click", handleBackdropClick);
+  }, []);
+
+  useEffect(() => {
     const shouldPoll = activeTab !== "prescription" || pendingCount > 0;
     if (!shouldPoll) {
       return;
@@ -78,6 +172,23 @@ export function PharmacyWorkspace() {
 
     return () => window.clearInterval(timer);
   }, [activeTab, pendingCount, loadData]);
+
+  function handleToggleTheme() {
+    const systemTheme = getSystemTheme();
+    const target: ResolvedTheme = resolvedTheme === "dark" ? "light" : "dark";
+    try {
+      if (target === systemTheme) {
+        localStorage.removeItem("color-scheme");
+        applyThemeMeta(null);
+      } else {
+        localStorage.setItem("color-scheme", target);
+        applyThemeMeta(target);
+      }
+    } catch {
+      applyThemeMeta(target);
+    }
+    setResolvedTheme(target);
+  }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
@@ -146,46 +257,52 @@ export function PharmacyWorkspace() {
     <div className="flex min-h-dvh flex-col">
       <header className="sticky-topbar">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 py-3.5">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+          <div className="flex items-center justify-between gap-3 py-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-[var(--accent-ink)]">
                 <Cross className="h-4 w-4" aria-hidden="true" />
               </div>
-              <div className="min-w-0">
-                <h1 className="page-title font-semibold text-[var(--ink-primary)]">
-                  ФармаКонтроль
-                </h1>
-                <p className="hidden text-xs text-[var(--ink-secondary)] sm:block">
-                  Проверка рецептов, контроль безопасности и склад аптеки
-                </p>
-              </div>
+              <h1 className="page-title font-semibold text-[var(--ink-primary)]">
+                ФармаКонтроль
+              </h1>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1 text-[var(--ink-secondary)]">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    supabaseConnected ? "bg-emerald-600" : "bg-slate-400"
-                  }`}
-                  aria-hidden="true"
-                />
-                {supabaseConnected ? "Supabase" : "Демо БД"}
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1 text-[var(--ink-secondary)]">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    n8nConfigured ? "bg-[var(--accent)]" : "bg-slate-400"
-                  }`}
-                  aria-hidden="true"
-                />
-                {n8nConfigured ? "n8n · AI" : "Локально"}
-              </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleToggleTheme}
+                aria-label={
+                  resolvedTheme === "dark"
+                    ? "Включить светлую тему"
+                    : "Включить тёмную тему"
+                }
+                title={
+                  resolvedTheme === "dark" ? "Светлая тема" : "Тёмная тема"
+                }
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--ink-secondary)] transition hover:border-[var(--border-strong)] hover:text-[var(--ink-primary)]"
+              >
+                {resolvedTheme === "dark" ? (
+                  <Sun className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => helpDialogRef.current?.showModal()}
+                aria-label="Справка о системе"
+                title="Справка"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--ink-secondary)] transition hover:border-[var(--border-strong)] hover:text-[var(--ink-primary)]"
+              >
+                <CircleHelp className="h-4 w-4" aria-hidden="true" />
+              </button>
             </div>
           </div>
 
           <div
             role="tablist"
-            aria-label="Разделы управления аптекой"
+            aria-label="Разделы"
             onKeyDown={handleTabKeyDown}
             className="workspace-tablist -mb-px"
           >
@@ -216,7 +333,7 @@ export function PharmacyWorkspace() {
                   )}
                   <span>{tab.label}</span>
                   {tab.id === "orders" && pendingCount > 0 && (
-                    <span className="rounded-full bg-[#fffaeb] px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[#9a5b13] ring-1 ring-amber-300/80">
+                    <span className="rounded-full border border-[var(--warning-border)] bg-[var(--warning-soft)] px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[var(--warning)]">
                       {pendingCount}
                     </span>
                   )}
@@ -231,19 +348,19 @@ export function PharmacyWorkspace() {
         {warning && (
           <div
             role="status"
-            className="mb-5 rounded-xl border border-[#f0d8a8] bg-[var(--warning-soft)] px-4 py-3 text-xs text-[#6d400c]"
+            className="mb-5 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-soft)] px-4 py-3 text-xs text-[var(--warning)]"
           >
             {warning}
           </div>
         )}
 
         <section
-          aria-label="Сводка аптеки"
+          aria-label="Сводка"
           className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
           <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-3">
             <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-              На проверке Rx
+              На проверке
             </div>
             <div className="mt-1 font-mono tabular-num text-xl font-semibold text-[var(--ink-primary)]">
               {pendingCount}
@@ -251,7 +368,7 @@ export function PharmacyWorkspace() {
           </div>
           <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-3">
             <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-              Всего заказов
+              Заказы
             </div>
             <div className="mt-1 font-mono tabular-num text-xl font-semibold text-[var(--ink-primary)]">
               {orders.length}
@@ -267,7 +384,7 @@ export function PharmacyWorkspace() {
           </div>
           <div className="rounded-xl border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-4 py-3">
             <div className="text-[11px] font-medium uppercase tracking-wide text-[var(--ink-muted)]">
-              Под замену (0 уп.)
+              Нет в наличии
             </div>
             <div className="mt-1 font-mono tabular-num text-xl font-semibold text-[var(--warning)]">
               {outOfStockCount}
@@ -285,7 +402,6 @@ export function PharmacyWorkspace() {
             <div>
               <PrescriptionForm
                 orders={orders}
-                inventoryCount={inventory.length}
                 onAnalyzed={handlePrescriptionAnalyzed}
                 onOpenPharmacistPanel={() => setActiveTab("orders")}
               />
@@ -324,23 +440,97 @@ export function PharmacyWorkspace() {
       <footer className="mt-10 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)]/70 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-[var(--ink-muted)] sm:px-6 lg:px-8">
           <span>
-            ФармаКонтроль · Generative AI · ISE MNU{" "}
+            ФармаКонтроль{" "}
             <span className="opacity-70">· Алина Сырлыбаева</span>
           </span>
-          <div className="flex flex-wrap items-center gap-3">
-            <a
-              href="https://t.me/mnu_pharmacy_bot"
-              target="_blank"
-              rel="noreferrer"
-              className="font-mono text-[var(--accent)] underline decoration-[var(--accent)]/35 underline-offset-4 hover:decoration-[var(--accent)]"
-            >
-              @mnu_pharmacy_bot
-            </a>
-            <span>·</span>
-            <span>Справочный ИИ-ассистент · Human-in-the-Loop</span>
-          </div>
+          <a
+            href="https://t.me/mnu_pharmacy_bot"
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono text-[var(--accent)] underline decoration-current/35 underline-offset-4 hover:decoration-current"
+          >
+            @mnu_pharmacy_bot
+          </a>
         </div>
       </footer>
+
+      <dialog
+        ref={helpDialogRef}
+        aria-labelledby="help-dialog-title"
+        className="help-dialog"
+        {...({ closedby: "any" } as Record<string, string>)}
+      >
+        <div className="p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4 border-b border-[var(--border-hairline)] pb-3.5">
+            <div>
+              <h2
+                id="help-dialog-title"
+                className="text-base font-semibold text-[var(--ink-primary)]"
+              >
+                О системе «ФармаКонтроль»
+              </h2>
+              <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+                Generative AI · ISE MNU
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => helpDialogRef.current?.close()}
+              aria-label="Закрыть справку"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ink-muted)] transition hover:bg-[var(--bg-subtle)] hover:text-[var(--ink-primary)]"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3 text-sm text-[var(--ink-secondary)]">
+            <p>
+              Сервис разбирает текст или фото рецепта, проверяет наличие и цены
+              по базе аптеки, подбирает дженерики при отсутствии оригинала и
+              предупреждает об аллергиях и лекарственных взаимодействиях.
+            </p>
+            <p>
+              Рецептурные (Rx) и рискованные заказы отправляются фармацевту в
+              Telegram-бот{" "}
+              <a
+                href="https://t.me/mnu_pharmacy_bot"
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-xs text-[var(--accent)] underline underline-offset-4"
+              >
+                @mnu_pharmacy_bot
+              </a>{" "}
+              на подтверждение.
+            </p>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border-hairline)] pt-3.5 font-mono text-[11px] text-[var(--ink-secondary)]">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-2.5 py-1">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  supabaseConnected ? "bg-[var(--success)]" : "bg-[var(--ink-muted)]"
+                }`}
+                aria-hidden="true"
+              />
+              {supabaseConnected ? "Supabase подключён" : "Демо БД"}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-2.5 py-1">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  n8nConfigured ? "bg-[var(--accent)]" : "bg-[var(--ink-muted)]"
+                }`}
+                aria-hidden="true"
+              />
+              {n8nConfigured ? "n8n активен" : "Локально"}
+            </span>
+          </div>
+
+          <p className="mt-3 text-xs text-[var(--ink-muted)]">
+            Информация носит справочный характер и не заменяет консультацию
+            врача.
+          </p>
+        </div>
+      </dialog>
     </div>
   );
 }

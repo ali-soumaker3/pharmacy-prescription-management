@@ -329,7 +329,7 @@ export interface PrescriptionPreset {
 export const PRESCRIPTION_PRESETS: PrescriptionPreset[] = [
   {
     id: "rx-allergy",
-    label: "Аллергия + аналог (Rx)",
+    label: "Аллергия",
     patientName: "Айсана Батырова",
     patientPhone: "+7 707 412 88 90",
     allergies: "Пенициллин",
@@ -337,7 +337,7 @@ export const PRESCRIPTION_PRESETS: PrescriptionPreset[] = [
   },
   {
     id: "rx-interaction",
-    label: "Взаимодействие (Варфарин)",
+    label: "Варфарин",
     patientName: "Марат Есенов",
     patientPhone: "+7 701 890 44 12",
     allergies: "Нет",
@@ -346,7 +346,7 @@ export const PRESCRIPTION_PRESETS: PrescriptionPreset[] = [
   },
   {
     id: "otc-fast",
-    label: "Без рецепта (OTC)",
+    label: "Без рецепта",
     patientName: "Алина Сырлыбаева",
     patientPhone: "+7 777 204 15 66",
     allergies: "Нет",

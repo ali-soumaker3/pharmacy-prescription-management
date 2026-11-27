@@ -11,11 +11,11 @@ interface InventoryTableProps {
 type InventoryFilter = "all" | "in_stock" | "out_of_stock" | "rx" | "otc";
 
 const FILTER_CHIPS: { id: InventoryFilter; label: string }[] = [
-  { id: "all", label: "Все позиции" },
+  { id: "all", label: "Все" },
   { id: "in_stock", label: "В наличии" },
   { id: "out_of_stock", label: "Нет в наличии" },
-  { id: "rx", label: "По рецепту (Rx)" },
-  { id: "otc", label: "Без рецепта (OTC)" },
+  { id: "rx", label: "Rx" },
+  { id: "otc", label: "OTC" },
 ];
 
 export function InventoryTable({ inventory }: InventoryTableProps) {
@@ -41,48 +41,8 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--accent)]">
-            Справочник остатков · Supabase
-          </p>
-          <h2 className="mt-1 text-lg font-semibold text-[var(--ink-primary)]">
-            Склад препаратов аптеки
-          </h2>
-          <p className="mt-0.5 text-sm text-[var(--ink-secondary)]">
-            Позиции с нулевым остатком используются ИИ для демонстрации подбора
-            доступных аналогов по действующему веществу.
-          </p>
-        </div>
-
-        <div className="relative w-full sm:w-80">
-          <Search
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Поиск препарата по названию или действующему веществу"
-            placeholder="Название или вещество..."
-            className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] py-2 pl-10 pr-9 text-sm text-[var(--ink-primary)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              aria-label="Очистить поиск"
-              className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--ink-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--ink-primary)]"
-            >
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {FILTER_CHIPS.map((chip) => {
             const isActive = filter === chip.id;
             return (
@@ -92,7 +52,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
                 onClick={() => setFilter(chip.id)}
                 className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                   isActive
-                    ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
                     : "border-[var(--border-hairline)] bg-[var(--bg-surface)] text-[var(--ink-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--ink-primary)]"
                 }`}
               >
@@ -102,9 +62,35 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
           })}
         </div>
 
-        <span className="font-mono tabular-num text-xs text-[var(--ink-muted)]">
-          Показано {filteredInventory.length} из {inventory.length}
-        </span>
+        <div className="flex w-full items-center gap-3 sm:w-auto">
+          <div className="relative flex-1 sm:w-72">
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label="Поиск препарата"
+              placeholder="Название или вещество..."
+              className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-input)] py-1.5 pl-10 pr-9 text-sm text-[var(--ink-primary)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Очистить поиск"
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--ink-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--ink-primary)]"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          <span className="shrink-0 font-mono tabular-num text-xs text-[var(--ink-muted)]">
+            {filteredInventory.length}/{inventory.length}
+          </span>
+        </div>
       </div>
 
       <div
@@ -115,7 +101,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
       >
         <table className="inventory-table">
           <caption id="inventory-table-caption" className="sr-only">
-            Каталог и остатки лекарственных препаратов на складе аптеки
+            Каталог и остатки препаратов на складе
           </caption>
           <thead>
             <tr>
@@ -134,7 +120,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
                   colSpan={6}
                   className="py-10 text-center text-sm text-[var(--ink-muted)]"
                 >
-                  По запросу ничего не найдено.
+                  Ничего не найдено.
                 </td>
               </tr>
             ) : (
@@ -147,7 +133,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
                     <span
                       className={`inline-block rounded-md px-2 py-0.5 font-mono text-xs font-medium ${
                         item.requires_prescription
-                          ? "bg-[#fde8e6] text-[#b42318]"
+                          ? "bg-[var(--danger-soft)] text-[var(--danger)]"
                           : "bg-[var(--bg-subtle)] text-[var(--ink-secondary)]"
                       }`}
                     >
@@ -164,11 +150,11 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
                       </span>
                     ) : item.stock_qty > 0 ? (
                       <span className="font-mono tabular-num text-xs font-medium text-[var(--warning)]">
-                        Мало ({item.stock_qty} уп.)
+                        {item.stock_qty} уп.
                       </span>
                     ) : (
                       <span className="text-xs font-medium text-[var(--danger)]">
-                        Нет в наличии
+                        Нет
                       </span>
                     )}
                   </td>

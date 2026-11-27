@@ -80,13 +80,26 @@
     {
       "parameters": {
         "conditions": {
-          "boolean": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.requires_pharmacist_approval }}",
-              "value2": true
+              "id": "rx-approval-check",
+              "leftValue": "={{ $json.requires_pharmacist_approval }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
       "id": "if-rx-required",
       "name": "IF: Нужна проверка фармацевта",

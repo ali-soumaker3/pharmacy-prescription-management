@@ -137,7 +137,7 @@ pnpm dev
 Заполните в `.env.local` ключи Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`), URL вебхуков `n8n` и `OPENROUTER_API_KEY`. Файл `.env.local` добавлен в `.gitignore` и в репозиторий не попадает.
 
 ### Настройка Supabase
-Выполните содержимое `supabase/schema.sql` в **Supabase → SQL Editor** (создаёт таблицы `medications` и `orders`, включает RLS, выдаёт права `service_role` и наполняет каталог из 8 препаратов).
+Выполните содержимое `supabase/schema.sql` в **Supabase → SQL Editor** (создаёт таблицы `medications` и `orders`, включает RLS, выдаёт права `service_role` и наполняет каталог из 28 препаратов).
 
 ### Настройка n8n (`ai2.mnu.kz`)
 1. Создайте 3 Credentials: `Header Auth` для OpenRouter (`Authorization: Bearer <key>`), `Header Auth` для Supabase (`apikey: <service_role_key>`) и `Telegram API` (`Access Token`).

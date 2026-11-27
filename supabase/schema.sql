@@ -32,6 +32,13 @@ create table if not exists public.orders (
 create index if not exists idx_orders_created_at on public.orders (created_at desc);
 create index if not exists idx_orders_status on public.orders (status);
 
+alter table public.medications enable row level security;
+alter table public.orders enable row level security;
+
+grant usage on schema public to service_role;
+grant all on table public.medications to service_role;
+grant all on table public.orders to service_role;
+
 insert into public.medications (id, name, active_ingredient, dosage, price_kzt, stock_qty, requires_prescription)
 values
   ('med-amox-500', 'Амоксициллин 500 мг', 'Амоксициллин', '500 мг, капсулы №20', 1850, 24, true),

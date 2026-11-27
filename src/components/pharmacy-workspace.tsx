@@ -323,7 +323,10 @@ export function PharmacyWorkspace() {
 
       <footer className="mt-10 border-t border-[var(--border-hairline)] bg-[var(--bg-surface)]/70 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-[var(--ink-muted)] sm:px-6 lg:px-8">
-          <span>ФармаКонтроль · Generative AI · ISE MNU</span>
+          <span>
+            ФармаКонтроль · Generative AI · ISE MNU{" "}
+            <span className="opacity-70">· Алина Сырлыбаева</span>
+          </span>
           <div className="flex flex-wrap items-center gap-3">
             <a
               href="https://t.me/mnu_pharmacy_bot"

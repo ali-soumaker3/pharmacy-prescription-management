@@ -55,7 +55,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
           </p>
         </div>
 
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search
             className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ink-muted)]"
             aria-hidden="true"
@@ -65,7 +65,7 @@ export function InventoryTable({ inventory }: InventoryTableProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Поиск препарата по названию или действующему веществу"
-            placeholder="Поиск препарата или вещества..."
+            placeholder="Название или вещество..."
             className="field-input w-full rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] py-2 pl-10 pr-9 text-sm text-[var(--ink-primary)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[#114b46]/15"
           />
           {query && (

@@ -277,9 +277,9 @@ video {
 }
 
 .table-wrapper {
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
   max-inline-size: 100%;
-  max-block-size: min(620px, 72dvh);
   container: inventory / inline-size;
   border: 1px solid var(--border-hairline);
   border-radius: 0.875rem;
@@ -300,9 +300,6 @@ video {
 }
 
 .inventory-table thead {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 2;
   background: var(--bg-subtle);
 }
 
@@ -362,9 +359,7 @@ video {
   }
 
   .inventory-table tbody th {
-    position: sticky;
-    inset-block-start: 0;
-    z-index: 2;
+    position: static;
     background: var(--bg-subtle);
     border-bottom: 1px solid var(--border-hairline);
     padding: 0.75rem 0.9rem;
